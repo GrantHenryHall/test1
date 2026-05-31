@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#1a1a2e" />
+<title>Whistle Alarm — Pressure Cooker Counter</title>
+<style>
+  :root {
+    --bg: #14142b;
+    --panel: #1f1f3d;
+    --accent: #ff7a45;
+    --accent2: #ffd166;
+    --ok: #4ade80;
+    --text: #f5f5fa;
+    --muted: #9a9ac0;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100%;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 16px 40px;
+    max-width: 520px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin: 8px 0 2px;
+    text-align: center;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 18px;
+    text-align: center;
+  }
+
+  /* Big counter display */
+  .counter-wrap {
+    width: 100%;
+    background: var(--panel);
+    border-radius: 24px;
+    padding: 24px 20px;
+    text-align: center;
+    margin-bottom: 16px;
+    border: 2px solid transparent;
+    transition: border-color .2s, background .2s;
+  }
+  .counter-wrap.alarming {
+    animation: flash 0.6s steps(1) infinite;
+  }
+  @keyframes flash {
+    0% { background: #5a1d1d; border-color: var(--accent); }
+    50% { background: var(--panel); border-color: var(--accent2); }
+  }
+  .count-num {
+    font-size: 5rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--accent2);
+  }
+  .count-of { color: var(--muted); font-size: 1.6rem; font-weight: 600; }
+  .count-label { color: var(--muted); font-size: 0.9rem; margin-top: 8px; letter-spacing: .04em; text-transform: uppercase; }
+
+  /* Volume meter */
+  .meter {
+    width: 100%;
+    height: 26px;
+    background: #0e0e22;
+    border-radius: 13px;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 6px;
+  }
+  .meter-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--ok), var(--accent2), var(--accent));
+    transition: width .05s linear;
+  }
+  .threshold-line {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 3px;
+    background: #fff;
+    box-shadow: 0 0 6px #fff;
+  }
+  .meter-caption {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 0.75rem;
+    margin-bottom: 18px;
+  }
+
+  /* Controls */
+  .controls { width: 100%; }
+  .field {
+    background: var(--panel);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .field label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+  }
+  .field .value { color: var(--accent2); font-weight: 700; font-size: 1.1rem; }
+  input[type=range] {
+    width: 100%;
+    accent-color: var(--accent);
+    height: 28px;
+  }
+  .hint { color: var(--muted); font-size: 0.72rem; margin-top: 6px; }
+
+  .buttons { display: flex; gap: 10px; margin-top: 6px; }
+  button {
+    flex: 1;
+    border: none;
+    border-radius: 16px;
+    padding: 16px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+    transition: transform .08s, opacity .2s;
+  }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .btn-start { background: var(--ok); color: #062a12; }
+  .btn-stop { background: var(--accent); }
+  .btn-reset { background: #3a3a5e; }
+  .btn-wide { width: 100%; flex: none; margin-top: 10px; }
+
+  .status {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 14px 0 4px;
+    min-height: 1.2em;
+  }
+  .status.live { color: var(--ok); }
+  .status.error { color: var(--accent); }
+
+  .log {
+    width: 100%;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 10px;
+    max-height: 90px;
+    overflow-y: auto;
+  }
+  .log div { padding: 2px 0; border-bottom: 1px solid #ffffff0d; }
+</style>
+</head>
+<body>
+  <h1>🔔 Whistle Alarm</h1>
+  <div class="subtitle">Counts pressure-cooker whistles and sounds an alarm</div>
+
+  <div class="counter-wrap" id="counterWrap">
+    <div><span class="count-num" id="countNum">0</span><span class="count-of"> / <span id="targetNum">3</span></span></div>
+    <div class="count-label">Whistles detected</div>
+  </div>
+
+  <div class="meter">
+    <div class="meter-fill" id="meterFill"></div>
+    <div class="threshold-line" id="thresholdLine" style="left:50%"></div>
+  </div>
+  <div class="meter-caption">
+    <span>Mic level</span>
+    <span id="levelReadout">—</span>
+  </div>
+
+  <div class="controls">
+    <div class="field">
+      <label>Whistles before alarm <span class="value" id="targetVal">3</span></label>
+      <input type="range" id="targetRange" min="1" max="15" step="1" value="3" />
+    </div>
+
+    <div class="field">
+      <label>Loudness threshold <span class="value" id="threshVal">50%</span></label>
+      <input type="range" id="threshRange" min="1" max="100" step="1" value="50" />
+      <div class="hint">The white line on the meter. A whistle counts when the level crosses above it. Raise it if background noise triggers false counts; lower it if real whistles are missed.</div>
+    </div>
+
+    <div class="field">
+      <label>Min. whistle length <span class="value" id="durVal">0.3s</span></label>
+      <input type="range" id="durRange" min="0" max="2000" step="100" value="300" />
+      <div class="hint">How long the sound must stay loud to count as a real whistle. Filters out short clinks and bumps.</div>
+    </div>
+
+    <div class="buttons">
+      <button class="btn-start" id="startBtn">▶ Start listening</button>
+      <button class="btn-stop" id="stopBtn" disabled>■ Stop</button>
+    </div>
+    <button class="btn-reset btn-wide" id="resetBtn">↺ Reset count</button>
+    <button class="btn-reset btn-wide" id="testBtn">🔊 Test alarm sound</button>
+  </div>
+
+  <div class="status" id="status">Press “Start listening” and allow microphone access.</div>
+  <div class="log" id="log"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // --- DOM refs ---
+  const countNum = document.getElementById("countNum");
+  const targetNum = document.getElementById("targetNum");
+  const targetVal = document.getElementById("targetVal");
+  const targetRange = document.getElementById("targetRange");
+  const threshVal = document.getElementById("threshVal");
+  const threshRange = document.getElementById("threshRange");
+  const durVal = document.getElementById("durVal");
+  const durRange = document.getElementById("durRange");
+  const meterFill = document.getElementById("meterFill");
+  const thresholdLine = document.getElementById("thresholdLine");
+  const levelReadout = document.getElementById("levelReadout");
+  const startBtn = document.getElementById("startBtn");
+  const stopBtn = document.getElementById("stopBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const testBtn = document.getElementById("testBtn");
+  const statusEl = document.getElementById("status");
+  const counterWrap = document.getElementById("counterWrap");
+  const logEl = document.getElementById("log");
+
+  // --- State ---
+  let audioCtx = null;
+  let analyser = null;
+  let micStream = null;
+  let rafId = null;
+  let dataArray = null;
+
+  let count = 0;
+  let target = 3;
+  let threshold = 0.50;      // 0..1 normalized loudness
+  let minDurationMs = 300;   // how long above threshold to count
+
+  let aboveSince = null;     // timestamp when level first crossed above threshold
+  let counted = false;       // already counted this crossing?
+  let alarmActive = false;
+  let alarmNodes = [];
+  let alarmTimer = null;
+
+  // --- Logging ---
+  function log(msg) {
+    const d = document.createElement("div");
+    const t = new Date().toLocaleTimeString();
+    d.textContent = "[" + t + "] " + msg;
+    logEl.prepend(d);
+    while (logEl.children.length > 30) logEl.removeChild(logEl.lastChild);
+  }
+  function setStatus(msg, cls) {
+    statusEl.textContent = msg;
+    statusEl.className = "status" + (cls ? " " + cls : "");
+  }
+
+  // --- Settings wiring ---
+  targetRange.addEventListener("input", function () {
+    target = parseInt(targetRange.value, 10);
+    targetVal.textContent = target;
+    targetNum.textContent = target;
+  });
+  threshRange.addEventListener("input", function () {
+    threshold = parseInt(threshRange.value, 10) / 100;
+    threshVal.textContent = threshRange.value + "%";
+    thresholdLine.style.left = threshRange.value + "%";
+  });
+  durRange.addEventListener("input", function () {
+    minDurationMs = parseInt(durRange.value, 10);
+    durVal.textContent = (minDurationMs / 1000).toFixed(1) + "s";
+  });
+
+  // --- Audio analysis loop ---
+  function computeLevel() {
+    // Time-domain RMS -> perceived loudness 0..1
+    analyser.getByteTimeDomainData(dataArray);
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+      const v = (dataArray[i] - 128) / 128; // -1..1
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / dataArray.length); // 0..~1
+    // Scale up; whistles are loud but RMS rarely hits 1. Clamp.
+    return Math.min(1, rms * 2.2);
+  }
+
+  function tick() {
+    const level = computeLevel();
+    const pct = Math.round(level * 100);
+    meterFill.style.width = pct + "%";
+    levelReadout.textContent = pct + "%";
+
+    const now = performance.now();
+    if (level >= threshold) {
+      if (aboveSince === null) aboveSince = now;
+      if (!counted && (now - aboveSince) >= minDurationMs) {
+        registerWhistle();
+        counted = true;
+      }
+    } else {
+      // dropped back below threshold -> ready for next whistle
+      aboveSince = null;
+      counted = false;
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function registerWhistle() {
+    if (alarmActive) return; // ignore counts while alarm is blaring
+    count++;
+    countNum.textContent = count;
+    log("Whistle #" + count + " detected");
+    // little pulse
+    counterWrap.style.transition = "none";
+    counterWrap.style.transform = "scale(1.05)";
+    setTimeout(function () {
+      counterWrap.style.transition = "transform .2s";
+      counterWrap.style.transform = "scale(1)";
+    }, 60);
+
+    if (count >= target) {
+      triggerAlarm();
+    }
+  }
+
+  // --- Alarm ---
+  function triggerAlarm() {
+    if (alarmActive) return;
+    alarmActive = true;
+    counterWrap.classList.add("alarming");
+    setStatus("⏰ ALARM! " + count + " whistles reached. Tap Reset to silence.", "error");
+    log("ALARM triggered at " + count + " whistles");
+    if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]);
+    beepLoop();
+  }
+
+  function beepLoop() {
+    if (!alarmActive || !audioCtx) return;
+    playBeep(880, 0.25);
+    setTimeout(function () { if (alarmActive) playBeep(1320, 0.25); }, 300);
+    alarmTimer = setTimeout(beepLoop, 800);
+  }
+
+  function playBeep(freq, dur) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "square";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + dur + 0.02);
+    alarmNodes.push(osc);
+  }
+
+  function stopAlarm() {
+    alarmActive = false;
+    counterWrap.classList.remove("alarming");
+    if (alarmTimer) { clearTimeout(alarmTimer); alarmTimer = null; }
+    alarmNodes.forEach(function (n) { try { n.stop(); } catch (e) {} });
+    alarmNodes = [];
+  }
+
+  // --- Start / stop mic ---
+  async function start() {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Microphone API not available. Use a modern browser over HTTPS (or localhost).");
+      }
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        }
+      });
+
+      const source = audioCtx.createMediaStreamSource(micStream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      dataArray = new Uint8Array(analyser.fftSize);
+      source.connect(analyser);
+
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      setStatus("🎙️ Listening… volume meter is live.", "live");
+      log("Microphone started");
+      tick();
+    } catch (err) {
+      setStatus("Error: " + err.message, "error");
+      log("Start failed: " + err.message);
+      if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    }
+  }
+
+  function stop() {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    stopAlarm();
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    meterFill.style.width = "0%";
+    levelReadout.textContent = "—";
+    setStatus("Stopped. Press “Start listening” to resume.");
+    log("Microphone stopped");
+  }
+
+  function reset() {
+    count = 0;
+    countNum.textContent = "0";
+    aboveSince = null;
+    counted = false;
+    stopAlarm();
+    if (micStream) setStatus("🎙️ Listening… count reset.", "live");
+    else setStatus("Count reset.");
+    log("Count reset");
+  }
+
+  // --- Buttons ---
+  startBtn.addEventListener("click", start);
+  stopBtn.addEventListener("click", stop);
+  resetBtn.addEventListener("click", reset);
+  testBtn.addEventListener("click", async function () {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") await audioCtx.resume();
+    playBeep(880, 0.25);
+    setTimeout(function () { playBeep(1320, 0.25); }, 300);
+    if (navigator.vibrate) navigator.vibrate(300);
+  });
+
+  // Keep screen awake while listening, if supported
+  let wakeLock = null;
+  async function requestWakeLock() {
+    try {
+      if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+    } catch (e) {}
+  }
+  startBtn.addEventListener("click", requestWakeLock);
+  document.addEventListener("visibilitychange", function () {
+    if (wakeLock !== null && document.visibilityState === "visible" && micStream) requestWakeLock();
+  });
+})();
+</script>
+</body>
+</html>
